@@ -12,10 +12,11 @@ How to run Mistral 7B Model with Chat-UI💬 on Amazon EC2 [^how-to-run-mistral]
 ## Amazon instance details
 - Image: "Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3 (Ubuntu 20.04)" (ami-0c24c447880015773)[^deep-learning-ami]
 - g5.xlarge instance, see instance comparison tool [^instance-comparison-tool]
-![[attachments/Pasted image 20240925112857.png]]
 - key pair: created new `harold-aws-rsa`
 - ssh, 8080 ports open
 - 512GB storage
+
+![Instance Comparison](attachments/AWS_GPU_Instances.png)
 
 [^deep-learning-ami]: [https://docs.aws.amazon.com/dlami/latest/devguide/appendix-ami-release-notes.html](https://docs.aws.amazon.com/dlami/latest/devguide/appendix-ami-release-notes.html)
 
