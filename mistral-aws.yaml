@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Instance
+Parameters:
+ KeyName:
+   Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+   Type: AWS::EC2::KeyPair::KeyName
+   ConstraintDescription: must be the name of an existing EC2 KeyPair.
+Mappings:
+  RegionToAmiId:
+    eu-north-1:
+      AMI: ami-0b3ff990f18882077
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-sg
+      GroupDescription: Security group for EC2 instance
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: g5.xlarge
+      ImageId: !FindInMap [RegionToAmiId, !Ref AWS::Region, AMI]
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 512
+            VolumeType: gp3
+      "Tags" : [
+        {"Key" : "Name", "Value" : "mistral-7b-instance"},
+      ]
+      SecurityGroups:
+        - Ref: SecurityGroup
+Outputs:
+  PublicDNS:
+    Description: Public DNSName of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance, PublicDnsName]
+  PublicIP:
+    Description: Public IP address of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance, PublicIp]
