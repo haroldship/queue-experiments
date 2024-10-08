@@ -1,3 +1,5 @@
+import argparse
+
 import aiohttp
 import asyncio
 import random
@@ -36,6 +38,7 @@ precomputed_max_tokens = [max(np.random.zipf(ZIPF_PARAM), MIN_TOKENS) for _ in r
 # Pre-compute sleep times using exponential distribution with mean 100 microseconds for all requests
 precomputed_sleep_times = [random.expovariate(1 / MEAN_WAIT_TIME_MICROSECONDS) for _ in range(NUM_REQUESTS)]
 
+
 # Function to send a request to the inference server
 async def send_request(session, prompt, max_tokens):
     """Sends a POST request to the Hugging Face inference server."""
@@ -45,7 +48,7 @@ async def send_request(session, prompt, max_tokens):
             "max_new_tokens": max_tokens
         }
     }
-    
+
     try:
         async with session.post(INFERENCE_URL, json=payload) as response:
             if response.status == 200:
@@ -55,6 +58,7 @@ async def send_request(session, prompt, max_tokens):
                 print(f"Request failed with status: {response.status}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
 # Function to run the requests with precomputed max tokens and sleep times
 async def run_requests():
@@ -66,14 +70,14 @@ async def run_requests():
         for i in range(NUM_REQUESTS):
             max_tokens = precomputed_max_tokens[i]
             prompt = f"Tell me more about {random.choice(POINTS_OF_INTEREST)}."
-            
+
             # Schedule the request
             task = asyncio.create_task(send_request(session, prompt, max_tokens))
             tasks.append(task)
-            
+
             # Wait for the precomputed sleep time
             await asyncio.sleep(precomputed_sleep_times[i])
-        
+
         # Wait for all tasks to complete
         await asyncio.gather(*tasks)
 
@@ -82,12 +86,25 @@ async def run_requests():
         print(f"Total number of requests sent: {NUM_REQUESTS}")
         print(f"Total time taken: {total_time_taken:.2f} seconds")
 
+
 # Main function to run requests
 async def main():
+    global INFERENCE_URL, NUM_REQUESTS, MEAN_WAIT_TIME_MICROSECONDS
+    parser = argparse.ArgumentParser(description="request sender")
+    parser.add_argument("-n", "--numreq", help="number of requests", type=int)
+    parser.add_argument("-u", "--url", help="url of inference server", type=str)
+    parser.add_argument("-w", "--waittime", help="mean wait time in microseconds between requests", type=int)
+    args = parser.parse_args()
+    if args.url:
+        INFERENCE_URL = args.url
+    if args.numreq:
+        NUM_REQUESTS = args.numreq
+    if args.waittime:
+        MEAN_WAIT_TIME_MICROSECONDS = args.waittime * 1e-6
     """Runs the requests."""
     await run_requests()
+
 
 # Entry point for running the async requests
 if __name__ == "__main__":
     asyncio.run(main())
-
