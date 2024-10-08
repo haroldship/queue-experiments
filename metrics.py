@@ -1,3 +1,4 @@
+import argparse
 import time
 import csv
 import requests
@@ -5,8 +6,8 @@ from datetime import datetime
 
 # Prometheus server details
 PROMETHEUS_URL = "http://localhost:9090/api/v1/query"
-CSV_FILE = "queue_size.csv"
 METRICS_INTERVAL_SECONDS = 5  # Query every 5 seconds
+CSV_FILE = 'queue_size.csv'
 
 # List of metrics to query
 METRICS = [
@@ -14,6 +15,7 @@ METRICS = [
     "tgi_batch_current_size",
     "rate(tgi_request_count[5s])"
 ]
+
 
 # Function to query Prometheus for metrics
 def query_prometheus(metric_name):
@@ -44,12 +46,13 @@ def query_prometheus(metric_name):
         print(f"Error querying Prometheus for {metric_name}: {e}")
     return None, None
 
+
 # Function to periodically gather Prometheus metrics and store in CSV
 def gather_metrics():
     """Gathers Prometheus metrics every 5 seconds and writes them to a CSV file."""
     with open(CSV_FILE, mode='a', newline='') as file:
         writer = csv.writer(file)
-        
+
         # If the file is new, write the header
         if file.tell() == 0:
             writer.writerow(["timestamp", "queue_size", "batch_current_size", "request_rate"])
@@ -83,7 +86,21 @@ def gather_metrics():
             # Wait for 5 seconds before querying again
             time.sleep(METRICS_INTERVAL_SECONDS)
 
+
 # Entry point for running the script
 if __name__ == "__main__":
-    gather_metrics()
+    global PROMETHEUS_URL, CSV_FILE, METRICS_INTERVAL_SECONDS
+    parser = argparse.ArgumentParser("prometheus metrics gathering tool")
+    parser.add_argument("-i", "--int", help="polling interval in seconds (5)", type=int)
+    parser.add_argument("-o", "--output", help="output file name (queue_size.csv)", type=str)
+    parser.add_argument("-u", "--url", help="url of prometheus server", type=str)
+    args = parser.parse_args()
 
+    if args.int:
+        METRICS_INTERVAL_SECONDS = args.int
+    if args.output:
+        CSV_FILE = args.output
+    if args.url:
+        PROMETHEUS_URL = args.url
+
+    gather_metrics()
