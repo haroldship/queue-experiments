@@ -1,4 +1,5 @@
 import argparse
+import statistics
 
 import aiohttp
 import asyncio
@@ -33,14 +34,18 @@ POINTS_OF_INTEREST = [
 ]
 
 # Pre-compute max_tokens using Zipf distribution for all requests
-precomputed_max_tokens = [max(np.random.zipf(ZIPF_PARAM), MIN_TOKENS) for _ in range(NUM_REQUESTS)]
-
+# precomputed_max_tokens = [max(np.random.zipf(ZIPF_PARAM), MIN_TOKENS) for _ in range(NUM_REQUESTS)]
+precomputed_max_tokens = None
 # Pre-compute sleep times using exponential distribution with mean 100 microseconds for all requests
-precomputed_sleep_times = [random.expovariate(1 / MEAN_WAIT_TIME_MICROSECONDS) for _ in range(NUM_REQUESTS)]
+precomputed_sleep_times = None
+
+next_no = 0
+rtts = [0.0] * NUM_REQUESTS
 
 
 # Function to send a request to the inference server
 async def send_request(session, prompt, max_tokens):
+    global next_no, rtts
     """Sends a POST request to the Hugging Face inference server."""
     payload = {
         "inputs": prompt,
@@ -50,9 +55,14 @@ async def send_request(session, prompt, max_tokens):
     }
 
     try:
+        start = time.monotonic()
+        req_no = next_no
+        next_no += 1
         async with session.post(INFERENCE_URL, json=payload) as response:
             if response.status == 200:
                 data = await response.json()
+                end = time.monotonic()
+                rtts[req_no] = end - start
                 print(f"Response: {data}")
             else:
                 print(f"Request failed with status: {response.status}")
@@ -65,7 +75,7 @@ async def run_requests():
     """Runs the loop to send requests with precomputed delays and max tokens."""
     async with aiohttp.ClientSession() as session:
         tasks = []
-        start_time = time.time()  # Track the start time
+        start_time = time.monotonic()  # Track the start time
 
         for i in range(NUM_REQUESTS):
             max_tokens = precomputed_max_tokens[i]
@@ -81,14 +91,17 @@ async def run_requests():
         # Wait for all tasks to complete
         await asyncio.gather(*tasks)
 
-        end_time = time.time()  # Track the end time
+        end_time = time.monotonic()  # Track the end time
         total_time_taken = end_time - start_time
         print(f"Total number of requests sent: {NUM_REQUESTS}")
         print(f"Total time taken: {total_time_taken:.2f} seconds")
+        print(f"Mean time taken: {total_time_taken/NUM_REQUESTS:.2f} seconds")
+        print(f"Mean of individual times {statistics.mean(rtts):.2f} seconds")
 
 
 # Main function to run requests
 async def main():
+    global precomputed_max_tokens, precomputed_sleep_times
     global INFERENCE_URL, NUM_REQUESTS, MEAN_WAIT_TIME_MICROSECONDS
     parser = argparse.ArgumentParser(description="request sender")
     parser.add_argument("-n", "--numreq", help="number of requests", type=int)
@@ -101,6 +114,12 @@ async def main():
         NUM_REQUESTS = args.numreq
     if args.waittime:
         MEAN_WAIT_TIME_MICROSECONDS = args.waittime * 1e-6
+    # Pre-compute max_tokens using Zipf distribution for all requests
+    # precomputed_max_tokens = [max(np.random.zipf(ZIPF_PARAM), MIN_TOKENS) for _ in range(NUM_REQUESTS)]
+    precomputed_max_tokens = [100] * NUM_REQUESTS
+    # Pre-compute sleep times using exponential distribution with mean 100 microseconds for all requests
+    precomputed_sleep_times = [random.expovariate(1 / MEAN_WAIT_TIME_MICROSECONDS) for _ in range(NUM_REQUESTS)]
+
     """Runs the requests."""
     await run_requests()
 

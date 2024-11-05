@@ -11,8 +11,8 @@ CSV_FILE = 'queue_size.csv'
 
 # List of metrics to query
 METRICS = [
-    "tgi_queue_size",
-    "tgi_batch_current_size",
+    f"max_over_time(tgi_queue_size[{METRICS_INTERVAL_SECONDS}s])",
+    f"max_over_time(tgi_batch_current_size[{METRICS_INTERVAL_SECONDS}s])",
     f"rate(tgi_request_count[{METRICS_INTERVAL_SECONDS}s])"
 ]
 
@@ -50,7 +50,7 @@ def query_prometheus(metric_name):
 # Function to periodically gather Prometheus metrics and store in CSV
 def gather_metrics():
     """Gathers Prometheus metrics every 5 seconds and writes them to a CSV file."""
-    with open(CSV_FILE, mode='a', newline='') as file:
+    with open(CSV_FILE, mode='x', newline='') as file:
         writer = csv.writer(file)
 
         # If the file is new, write the header
