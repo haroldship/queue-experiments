@@ -13,7 +13,7 @@ CSV_FILE = 'queue_size.csv'
 METRICS = [
     "tgi_queue_size",
     "tgi_batch_current_size",
-    "rate(tgi_request_count[5s])"
+    f"rate(tgi_request_count[{METRICS_INTERVAL_SECONDS}s])"
 ]
 
 
@@ -89,7 +89,6 @@ def gather_metrics():
 
 # Entry point for running the script
 if __name__ == "__main__":
-    global PROMETHEUS_URL, CSV_FILE, METRICS_INTERVAL_SECONDS
     parser = argparse.ArgumentParser("prometheus metrics gathering tool")
     parser.add_argument("-i", "--int", help="polling interval in seconds (5)", type=int)
     parser.add_argument("-o", "--output", help="output file name (queue_size.csv)", type=str)

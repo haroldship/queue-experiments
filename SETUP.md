@@ -24,20 +24,29 @@ How to run Mistral 7B Model with Chat-UI💬 on Amazon EC2 [^how-to-run-mistral]
 [^instance-comparison-tool]: [https://eu-north-1.console.aws.amazon.com/ec2/home?region=eu-north-1#InstanceTypes:v=3;gpus=%3E0;sort=default-otherLinux](https://eu-north-1.console.aws.amazon.com/ec2/home?region=eu-north-1#InstanceTypes:v=3;gpus=%3E0;sort=default-otherLinux)
 
 # Summary of steps
-- Create an Amazon EC2 Instance running: Mistral 7B Instruct model in TGI container using Docker and AWQ Quantization
+- Create an Amazon EC2 Instance
+- Create a Docker network for container communication
+- Run a Mistral 7B Instruct model in TGI container using Docker and AWQ Quantization
 - Run prometheus
 - Run queries
 
-## Create an instance running tgis
+## Create an instance 
 The following are from [^how-to-run-mistral] with modifications indicated.
 
 1. Create an EC2 instance with image `ami-0c24c447880015773` (Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3 (Ubuntu 20.04)), with instance type `g5.xlarge`, 512GB of storage, and a new or existing keypair  for ssh, and ssh and 8080 ports open
-2. Log in to the instance: `ssh -i "~/secrets/harold-aws-rsa.pem" ubuntu@ec2-13-60-230-158.eu-north-1.compute.amazonaws.com` - this one runs tgi
-3. Set up a docker network so that prometheus can scrape tgis:
+```commandline
+aws ec2 run-instances --image-id "ami-0c24c447880015773" --instance-type "g5.12xlarge" --key-name "harold-aws-rsa" --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' --instance-market-options '{"MarketType":"spot"}' --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' --count "1" 
+```
+
+## Setup a Docker network so containers can communicate
+1. Log in to the instance: `ssh -i "~/secrets/harold-aws-rsa.pem" ubuntu@ec2-13-60-47-136.eu-north-1.compute.amazonaws.com` - this one runs tgi
+2. Set up a docker network so that prometheus can scrape tgis:
 ```bash
 docker network create param-est 
 ```
-4. Start docker container of tgis running mistral-7b with AWQ quantization:
+
+## Run TGIS
+1. Start docker container of tgis running mistral-7b with AWQ quantization:
    a. With one GPU
 ```bash
 model=TheBloke/Mistral-7B-Instruct-v0.1-AWQ
@@ -48,7 +57,8 @@ docker run --gpus '"device=0"' -e CUDA_VISIBLE_DEVICES=0 -e MAX_CONCURRENT_REQUE
 --model-id $model --quantize awq \
 --max-concurrent-requests 1000 \
 --max-input-tokens 8142 \
---max-total-tokens 16384
+--max-total-tokens 16384 \
+--max-batch-prefill-tokens 8142
 ```
    b. With two GPUs
 ```bash
@@ -60,7 +70,8 @@ docker run --gpus '"device=0,1"' -e CUDA_VISIBLE_DEVICES=0,1 -e MAX_CONCURRENT_R
 --model-id $model --quantize awq \
 --max-concurrent-requests 1000 \
 --max-input-tokens 8142 \
---max-total-tokens 81936
+--max-total-tokens 81936 \
+--max-batch-prefill-tokens 8142
 ```
    c. With four GPUs
 ```bash
@@ -72,25 +83,20 @@ docker run --gpus '"device=0,1,2,3"' -e CUDA_VISIBLE_DEVICES=0,1,2,3 -e MAX_CONC
 --model-id $model --quantize awq \
 --max-concurrent-requests 1000 \
 --max-input-tokens 8142 \
---max-total-tokens 196608
+--max-total-tokens 196608 \
+--max-batch-prefill-tokens 8142
 ```
-5. Check server and check GPU usage:
+2. Check server and check GPU usage:
 ```bash
 docker logs -f tgis
 nvidia-smi
 ```
 
-5. In another terminal, tunnel the prometheus port to localhost using ssh tunnel:
-```bash
-ssh -i "~/secrets/harold-aws-rsa.pem" -N -L 9090:localhost:9090 ubuntu@ec2-13-60-230-158.eu-north-1.compute.amazonaws.com
-```
-
-
 
 ## Run Prometheus 
 1. Create a directory and config file for prometheus
 ```bash
-mkdir prometheus`
+mkdir prometheus
 cd prometheus/
 ```
 2. Create `prometheus.yml` with the following contents:
@@ -139,7 +145,13 @@ docker run -d -p 9090:9090 \
 --network param-est \
 prom/prometheus
 ```
-4. Check prometheus in browser at [http://localhost:9090](http://localhost:9090)
+
+4. In another terminal, tunnel the prometheus port to localhost using ssh tunnel:
+```bash
+ssh -i "~/secrets/harold-aws-rsa.pem" -N -L 9090:localhost:9090 ubuntu@ec2-13-60-47-136.eu-north-1.compute.amazonaws.com
+```
+
+5. Check prometheus in browser at [http://localhost:9090](http://localhost:9090)
 
 ## Run experiments
 1. Start a fourth session - this one is on same instance for now
@@ -147,9 +159,22 @@ prom/prometheus
 ```bash
 pip install aiohttp numpy requests
 ```
-3. Copy the code below into experiments.py:
+3. Make a directory for the experiments on the instance:
 ```bash
-python sender.py -u http://ec2-13-60-230-158.eu-north-1.compute.amazonaws.com:8080/generate -n 100 -w 1000
+mkdir experiments
+cd experiments
+```
+4. Copy the python files over
+```bash
+scp -i "~/secrets/harold-aws-rsa.pem" *.py ubuntu@ec2-13-60-47-136.eu-north-1.compute.amazonaws.com:experiments/
+```
+5. Start the metrics
+```commandline
+python metrics.py -
+```
+6. Run the experiment possible in several terminals simultaneously either on laptop or on instance
+```bash
+python sender.py -u http://ec2-13-60-47-136.eu-north-1.compute.amazonaws.com:8080/generate -n 100 -w 1000
 ```
 
 
