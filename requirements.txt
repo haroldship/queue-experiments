@@ -1,0 +1,5 @@
+numpy
+aiohttp
+requests
+pandas
+matplotlib

@@ -35,7 +35,21 @@ The following are from [^how-to-run-mistral] with modifications indicated.
 
 1. Create an EC2 instance with image `ami-0c24c447880015773` (Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3 (Ubuntu 20.04)), with instance type `g5.xlarge`, 512GB of storage, and a new or existing keypair  for ssh, and ssh and 8080 ports open
 ```commandline
-aws ec2 run-instances --image-id "ami-0c24c447880015773" --instance-type "g5.12xlarge" --key-name "harold-aws-rsa" --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' --instance-market-options '{"MarketType":"spot"}' --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' --count "1" 
+aws ec2 run-instances --image-id "ami-0c24c447880015773" \
+    --instance-type "g5.12xlarge" \
+    --key-name "harold-aws-rsa" \
+    --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' \
+    --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' \
+    --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' \
+    --instance-market-options '{"MarketType":"spot"}' \
+    --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' \
+    --count "1" 
+```
+2. List EC2 instances to verify it's there:
+```commandline
+aws ec2 describe-instances \
+    --query "Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key=='Name'].Value|[0],PublicIpAddress,PublicDnsName]" \
+    --output table
 ```
 
 ## Setup a Docker network so containers can communicate

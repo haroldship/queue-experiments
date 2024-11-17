@@ -92,7 +92,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("prometheus metrics gathering tool")
     parser.add_argument("-i", help="polling interval in seconds (5)", type=int)
     parser.add_argument("-o", help="output file name (queue_size.csv)", type=str)
-    parser.add_argument("-u", help="url of prometheus server", type=str)
+    parser.add_argument("-u", help="url of prometheus server (http://localhost:9090/api/v1/query)", type=str)
     args = parser.parse_args()
 
     if args.i:
