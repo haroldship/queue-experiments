@@ -1,4 +1,5 @@
 import argparse
+import atexit
 import csv
 import itertools
 import os.path
@@ -66,29 +67,35 @@ async def send_request(session, prompt, max_tokens):
     }
 
     try:
-        start = time.monotonic()
+        start = time.time()
         req_no = next_no
         next_no += 1
         async with session.post(INFERENCE_URL, json=payload) as response:
             if response.status == 200:
                 data = await response.json()
-                end = time.monotonic()
-                rtts.append([end - start])
+                end = time.time()
+                rtts.append([req_no, start, end, end - start, 0])
                 # print(f"Response: {data}")
             else:
-                rtts.append([req_no, 0.0])
+                end = time.time()
+                rtts.append([req_no, start, end, end - start, 1])
                 print(f"Request failed with status: {response.status}")
     except Exception as e:
+        conn = session.connector
         print(f"An error occurred: {e}")
 
 
 # Function to run the requests with precomputed max tokens and sleep times
 async def run_requests(c, C):
     """Runs the loop to send requests with precomputed delays and max tokens."""
+    np.random.seed(c)
     global CSV_FILE
-    async with aiohttp.ClientSession() as session:
+    conn = aiohttp.connector.TCPConnector(limit=1000, limit_per_host=1000)
+    timeout = aiohttp.ClientTimeout(total=1200)
+    async with aiohttp.ClientSession(connector=conn, timeout=timeout) as session:
+        print(f"running client {c} of {C}")
         tasks = []
-        start_time = time.monotonic()  # Track the start time
+        start_time = time.time()  # Track the start time
 
         for i in range(NUM_REQUESTS):
             max_tokens = precomputed_max_tokens[i]
@@ -104,15 +111,18 @@ async def run_requests(c, C):
         # Wait for all tasks to complete
         await asyncio.gather(*tasks)
 
-        end_time = time.monotonic()  # Track the end time
+        end_time = time.time()  # Track the end time
         total_time_taken = end_time - start_time
         print(f"Total number of requests sent: {NUM_REQUESTS}")
         print(f"Total time taken: {total_time_taken:.2f} seconds")
         print(f"Mean time taken: {statistics.mean(itertools.chain.from_iterable(rtts)):.2f} seconds")
         if C > 1:
             b, e = os.path.splitext(CSV_FILE)
-            CSV_FILE = f'{b}_{c}{e}'
-        with open(CSV_FILE, mode="w") as f:
+            fname = f'{b}_{c}{e}'
+        else:
+            fname = CSV_FILE
+        with open(fname, mode="w") as f:
+            print(f"Writing requests to {fname}")
             w = csv.writer(f)
             w.writerows(rtts)
 
@@ -152,22 +162,28 @@ async def main():
     else:
         precomputed_max_tokens = [max(np.random.zipf(ZIPF_PARAM), MIN_TOKENS) for _ in range(NUM_REQUESTS)]
 
-    precomputed_sleep_times = [random.expovariate(1 / MEAN_WAIT_TIME_SECONDS) for _ in range(NUM_REQUESTS)]
+    precomputed_sleep_times = [np.random.exponential(MEAN_WAIT_TIME_SECONDS) for _ in range(NUM_REQUESTS)]
 
     def run_proc(c, C):
+        print(f'About to asynchronously run client {c} of {C}')
         asyncio.run(run_requests(c, C))
 
     procs = []
-    for c in range(1, NUM_CLIENTS):
+    for c in range(2, NUM_CLIENTS+1):
+        print(f'About to create process {c} of {NUM_CLIENTS}')
         p = Process(target=run_proc, args=(c, NUM_CLIENTS), name=f'sender-{c}')
         p.start()
         procs.append(p)
 
     """Runs the requests."""
+    print(f'About to create process {CLIENT} of {NUM_CLIENTS}')
     await run_requests(CLIENT, NUM_CLIENTS)
 
-    for p in procs:
-        p.join()
+    def cleanup(procs):
+        for p in procs:
+            p.join()
+
+    atexit.register(cleanup, procs)
 
 
 # Entry point for running the async requests
