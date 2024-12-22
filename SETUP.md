@@ -34,6 +34,45 @@ How to run Mistral 7B Model with Chat-UI💬 on Amazon EC2 [^how-to-run-mistral]
 The following are from [^how-to-run-mistral] with modifications indicated.
 
 1. Create an EC2 instance with image `ami-0c24c447880015773` (Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.3 (Ubuntu 20.04)), with instance type `g5.xlarge`, 512GB of storage, and a new or existing keypair  for ssh, and ssh and 8080 ports open
+
+1 GPU, regular:
+```commandline
+aws ec2 run-instances --image-id "ami-0c24c447880015773" \
+    --instance-type "g5.xlarge" \
+    --key-name "harold-aws-rsa" \
+    --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' \
+    --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' \
+    --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' \
+    --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' \
+    --count "1" 
+```
+
+4 GPUs, regular:
+```commandline
+aws ec2 run-instances --image-id "ami-0c24c447880015773" \
+    --instance-type "g5.12xlarge" \
+    --key-name "harold-aws-rsa" \
+    --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' \
+    --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' \
+    --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' \
+    --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' \
+    --count "1" 
+```
+
+1 GPU, spot:
+```commandline
+aws ec2 run-instances --image-id "ami-0c24c447880015773" \
+    --instance-type "g5.xlarge" \
+    --key-name "harold-aws-rsa" \
+    --block-device-mappings '{"DeviceName":"/dev/sda1","Ebs":{"Encrypted":false,"DeleteOnTermination":true,"Iops":3000,"SnapshotId":"snap-0b7487c9f2581c30d","VolumeSize":512,"VolumeType":"gp3","Throughput":125}}' \
+    --network-interfaces '{"AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-00d3cee852f586c48"]}' \
+    --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"harold-llm"}]}' \
+    --instance-market-options '{"MarketType":"spot"}' \
+    --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' \
+    --count "1" 
+```
+
+4 GPUs, spot:
 ```commandline
 aws ec2 run-instances --image-id "ami-0c24c447880015773" \
     --instance-type "g5.12xlarge" \
@@ -45,6 +84,8 @@ aws ec2 run-instances --image-id "ami-0c24c447880015773" \
     --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":true,"EnableResourceNameDnsAAAARecord":false}' \
     --count "1" 
 ```
+
+
 2. List EC2 instances to verify it's there:
 ```commandline
 aws ec2 describe-instances \
@@ -52,11 +93,23 @@ aws ec2 describe-instances \
     --output table
 ```
 
+3. Set environment variable AWS_HOST to host
+```commandline
+AWS_HOST=$(aws ec2 describe-instances \
+    --query "Reservations[*].Instances[?Tags[?Key=='Name'].Value | [0] == 'harold-llm'].[PublicDnsName]" \
+    --output text)
+```
+
 ## Setup a Docker network so containers can communicate
-1. Log in to the instance: `ssh -i "~/secrets/harold-aws-rsa.pem" ubuntu@ec2-13-60-47-136.eu-north-1.compute.amazonaws.com` - this one runs tgi
+1. Log in to the instance: `ssh -i "~/secrets/harold-aws-rsa.pem" ubuntu@${AWS_HOST}`
 2. Set up a docker network so that prometheus can scrape tgis:
 ```bash
 docker network create param-est 
+```
+
+## Copy files to AWS host
+```commandline
+scp -i ~/secrets/harold-aws-rsa.pem prometheus.yml requirements.txt *.py ubuntu@${AWS_HOST}:
 ```
 
 ## Run TGIS

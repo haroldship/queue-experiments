@@ -108,8 +108,8 @@ def run_docker_container(max_batch_size=1):
     # Build the docker command
     docker_command = [
         "docker", "run",
-        "--gpus", "\"device=0,1,2,3\"",
-        "-e", "CUDA_VISIBLE_DEVICES=0,1,2,3",
+        "--gpus", "\"device=0\"",
+        "-e", "CUDA_VISIBLE_DEVICES=0",
         "-e", "MAX_CONCURRENT_REQUESTS=1000",
         "--shm-size", "1g",
         "-d",
@@ -130,20 +130,40 @@ def run_docker_container(max_batch_size=1):
 
     try:
         print(f"Starting docker container: {docker_command}.")
-        subprocess.run(docker_command, check=True)
-        print("Docker container started successfully.")
-        return container_name
+        res = subprocess.run(docker_command, check=True)
+        if res.returncode == 0:
+            print("Docker container started successfully.")
+            return container_name
+        else:
+            print(f"Error while starting the Docker container: {res.stderr}")
+            return None
     except subprocess.CalledProcessError as e:
         print(f"Error while starting the Docker container: {e}")
         return None
 
 
+def wait_for_container(container_name, check_word='Connected', timeout=120):
+    start_time = time.time()
+    while True:
+        log_cmd = ["docker", "logs", container_name]
+        logs_result = subprocess.run(log_cmd, capture_output=True, text=True)
+
+        if check_word in logs_result.stdout:
+            print(f"'{check_word}' found in logs. Proceeding...")
+            return True
+
+        if time.time() - start_time > timeout:
+            print(f"Timeout waiting for '{check_word}' in logs.")
+            return False
+
+        time.sleep(1)  # Check logs every second
+
 # Main process
 if __name__ == "__main__":
-    Bs = [1, 2, 4, 8, 16]
-    Cs = [4]
+    Bs = [1]
+    Cs = [1]
     ts = [200]
-    ws = [1_000_000]
+    ws = [10_000, 40_000, 100_000, 400_000, 1_000_000, 4_000_000]
     ds = [2]
     date_dname = "data_" + datetime.now().strftime("%d%b")
     if not os.path.exists(date_dname):
@@ -154,8 +174,15 @@ if __name__ == "__main__":
     for B in Bs:
 
         container_name = run_docker_container(max_batch_size=B)
+        if container_name is None:
+            print('failed to start container!')
+            break
+
         print(f'waiting for container with max-batch-size={B} to be ready...')
-        time.sleep(45)
+        ok = wait_for_container(container_name)
+        if not ok:
+            print('failed to start tgi server')
+            break
 
         for C in Cs:
             for t in ts:
