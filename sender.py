@@ -8,7 +8,6 @@ from multiprocessing import Process
 
 import aiohttp
 import asyncio
-import random
 import time
 import numpy as np
 
@@ -30,6 +29,8 @@ CSV_FILE="round_trips.csv"
 
 NUM_CLIENTS=1
 CLIENT=1
+
+SEED_BASE=1
 
 MAX_TOKENS = None
 
@@ -88,7 +89,7 @@ async def send_request(session, prompt, max_tokens):
 # Function to run the requests with precomputed max tokens and sleep times
 async def run_requests(c, C):
     """Runs the loop to send requests with precomputed delays and max tokens."""
-    np.random.seed(c)
+    np.random.seed(SEED_BASE + c)
     global CSV_FILE
     conn = aiohttp.connector.TCPConnector(limit=1000, limit_per_host=1000)
     timeout = aiohttp.ClientTimeout(total=1200)
@@ -99,7 +100,7 @@ async def run_requests(c, C):
 
         for i in range(NUM_REQUESTS):
             max_tokens = precomputed_max_tokens[i]
-            prompt = f"Tell me more about {random.choice(POINTS_OF_INTEREST)}."
+            prompt = f"Tell me more about {np.random.choice(POINTS_OF_INTEREST)}."
 
             # Schedule the request
             task = asyncio.create_task(send_request(session, prompt, max_tokens))
@@ -137,6 +138,7 @@ async def main():
     parser.add_argument("-c", help="client number (1)", type=int)
     parser.add_argument("-n", help="number of requests (20_000)", type=int)
     parser.add_argument("-o", help="output file name (round_trips.csv)", type=str)
+    parser.add_argument("-s", help="randomization seed", type=int, default=1)
     parser.add_argument("-t", help="max output tokens (RANDOM)", type=int)
     parser.add_argument("-u", help="url of inference server (http://127.0.0.1:8080/generate)", type=str)
     parser.add_argument("-w", help="mean wait time in microseconds between requests", type=int)
@@ -149,6 +151,8 @@ async def main():
         NUM_REQUESTS = args.n
     if args.o:
         CSV_FILE = args.o
+    if args.s:
+        SEED_BASE = args.s
     if args.t:
         MAX_TOKENS = args.t
     if args.u:

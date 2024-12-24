@@ -1,0 +1,18 @@
+batch_sizes:
+  - 1
+
+num_clients:
+  - 1
+
+max_output_tokens:
+  - 200
+
+lambdas:
+  - 0.1
+  - 0.7
+  - 1.0
+  - 1.4
+  - 2.0
+
+deltas:
+  - 2
